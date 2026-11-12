@@ -159,7 +159,15 @@ would print a wrong sentence around a right ending.
 Off by default. The app works completely without it — everything below is an
 add-on to the static generator, never a replacement for it.
 
-Settings → **Model-written sentences**. Pick a provider (Groq, Together,
+Open **Settings** (the gear, top right). The provider, endpoint and model are
+already filled in for Mistral Large 4 — paste your API key into the last field
+and the feature switches itself on. Then press **Refill pool**.
+
+Settings also shows a build marker (`Build v6 — cached offline`). If that does
+not match the build you just deployed, the installed app is still serving a
+cached older copy: close it and reopen, or bump `CACHE` in `sw.js`.
+
+Pick a provider (Groq, Together,
 OpenRouter, DeepInfra, or any OpenAI-compatible endpoint), paste your own API
 key, press **Refill pool**. The key is stored in this browser profile and is
 sent only to the endpoint you chose.
@@ -208,53 +216,69 @@ telling you to switch.
 
 ### Which model
 
-The app defaults to **Mistral Large 4** ("Le Chonk"), Mistral's current
-open-weight flagship: a 1.05T-parameter multimodal MoE with 52B active
-parameters, released November 2026 under the Mistral Ecosystem Open Weight
-License v26.10 — a modified MIT that permits free use, modification,
-fine-tuning and commercialisation, with a separate agreement required only for
-Model-as-a-Service offerings. Its API is OpenAI-compatible, so this client
-talks to it unchanged.
+Defaults to **OpenRouter's free tier** — no card, no credits:
 
-The ID differs by provider:
+| Field | Value |
+|---|---|
+| Provider | OpenRouter (free tier) |
+| Endpoint | `https://openrouter.ai/api/v1` |
+| Model | `nvidia/nemotron-3-ultra-550b-a55b:free` |
 
-| Provider | Endpoint | Model ID |
-|---|---|---|
-| Mistral (direct) | `https://api.mistral.ai/v1` | `mistral-large-4` |
-| OpenRouter | `https://openrouter.ai/api/v1` | `mistralai/mistral-large-4-0` |
+Get a key at openrouter.ai, paste it into Settings, press **Refill pool**.
 
-Both are pre-filled; pick the provider and paste your key. The version is
-pinned deliberately rather than using the `mistral-large-latest` alias, which
-Mistral repoints when it ships a new flagship — your sentences would change
-model underneath you without the app changing.
+#### The free-tier limits shape how this works
 
-Mistral is the sensible default here for a reason beyond benchmarks: it is
-trained in Europe and repeatedly reported as the strongest open-weight family
-for German, French and Italian, which is where US-trained models tend to
-stumble. If you want to compare, the refill log makes it an experiment rather
-than an argument — see below.
+Any OpenRouter ID ending in `:free` costs nothing and allows **20 requests a
+minute and 50 a day** — 1,000 a day once you have bought at least $10 of
+credits. A full pool is roughly 50 calls, so:
 
-#### Other providers
+- **Filling an empty pool costs about one day's free allowance.** If you run
+  out, the app stops cleanly, keeps what it got, and says so. Press Refill
+  again tomorrow.
+- **Topping up costs a few calls a month**, because only the cells you have
+  drained get refilled.
+- The refill button budgets 40 calls on a free model, staying short of the cap
+  rather than running into it, and backs off once on a 429 before giving up.
 
-For Groq, Together and DeepInfra the app ships the endpoint but no model ID,
-because theirs go stale fast — paste the ID from the provider's current list.
-Two things matter more than leaderboard position:
+Nothing breaks when the quota runs out: the pool keeps serving, and the static
+generator covers whatever the pool cannot.
 
-- **Size.** German adjective endings are where small models fail. A 7B model
-  will get most items rejected and cost you more in retries than a big one
-  costs in tokens.
-- **European-language strength.** Qwen 3.5 is the broader multilingual family
-  and scores higher on raw general benchmarks; German-specific fine-tunes such
-  as SauerkrautLM exist if you want to experiment.
+#### Free model IDs rotate — check before trusting a guide
+
+Free endpoints exist only while some provider subsidises them, and IDs that
+older guides still recommend (`openai/gpt-oss-120b:free`,
+`qwen/qwen3-coder:free`, `meta-llama/llama-3.3-70b-instruct:free`) now return
+404. As of early November 2026 these were answering:
+
+| Free ID | Why you might pick it |
+|---|---|
+| `nvidia/nemotron-3-ultra-550b-a55b:free` | 550B, the largest free model — the default here |
+| `google/gemma-4-31b-it:free` | Google's models tend to be strong on European languages |
+| `nvidia/nemotron-3.5-super-vl:free` | 120B MoE, 12B active |
+| `nvidia/nemotron-3.5-lightning:free` | fastest of the group |
+| `openrouter/free` | OpenRouter's router, picks a free model at random |
+
+If one 404s, swap the ID — nothing else changes. And since free endpoints may
+log prompts or use them for training, note that what is sent is a German
+grammar instruction and nothing about you.
+
+**Which is actually best for German? Run the experiment.** I do not know, and
+neither does a leaderboard — German adjective endings are a narrow skill. Put
+one ID in, refill, read the rejection log; swap, refill, compare. A model that
+throws mostly `gender-contradiction` is telling you to use a different one.
+Size is the one reliable prior: small models get German endings wrong.
+
+#### Paid alternatives
+
+Mistral Large 4 (`mistral-large-4` at `https://api.mistral.ai/v1`) is in the
+provider list if you ever want it — Mistral is repeatedly reported as the
+strongest open-weight family for German, and Large 4 is open-weight under the
+Mistral Ecosystem Open Weight License. It is not free. The same model is on
+OpenRouter as `mistralai/mistral-large-4-0`, billed per token.
 
 If an endpoint rejects `response_format`, the client retries once without it
 and salvages JSON out of prose, so a provider that does not support JSON mode
 still works.
-
-**You do not have to trust any of that**, which is the useful part. The refill
-log reports kept-versus-rejected with reasons, so point it at two models, run
-one refill each, and keep whichever survives the validator more often. The app
-measures the model for you.
 
 ### Tests
 

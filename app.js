@@ -11,6 +11,10 @@ import { refill, loadConfig, saveConfig, isConfigured, PROVIDERS } from './ai.js
 
 const $ = id => document.getElementById(id);
 
+/* Shown in Settings so you can tell at a glance which build is deployed —
+   an installed PWA can serve a cached older one. Keep in step with sw.js. */
+const APP_VERSION = 'v6';
+
 const app = {
   attempts: store.loadAttempts(),
   settings: store.loadSettings(),
@@ -317,6 +321,8 @@ $('settings-open').addEventListener('click', () => {
   $('stats').textContent =
     `${scored.length} scored attempts over ${days} day${days === 1 ? '' : 's'}, ${acc}% right.`;
   renderAiFields();
+  const sw = navigator.serviceWorker?.controller ? 'cached offline' : 'not cached yet';
+  $('build').textContent = `Build ${APP_VERSION} — ${sw}.`;
   $('settings').showModal();
 });
 
@@ -383,7 +389,6 @@ function renderPool() {
 function renderAiFields() {
   const cfg = loadConfig();
   $('ai-toggle').checked = cfg.enabled;
-  $('ai-fields').hidden = !cfg.enabled;
   const sel = $('ai-provider');
   if (!sel.options.length) {
     for (const [id, p] of Object.entries(PROVIDERS)) {
@@ -410,7 +415,6 @@ function readAiFields() {
 
 $('ai-toggle').addEventListener('change', () => {
   readAiFields();
-  $('ai-fields').hidden = !$('ai-toggle').checked;
   if ($('ai-toggle').checked) maybeRefill();
 });
 $('ai-provider').addEventListener('change', e => {
@@ -423,7 +427,12 @@ $('ai-provider').addEventListener('change', e => {
   readAiFields();
 });
 for (const id of ['ai-base', 'ai-model', 'ai-key']) {
-  $(id).addEventListener('change', readAiFields);
+  $(id).addEventListener('change', () => {
+    if (id === 'ai-key' && $('ai-key').value.trim() && !$('ai-toggle').checked) {
+      $('ai-toggle').checked = true;
+    }
+    readAiFields();
+  });
 }
 
 let refilling = false;
@@ -443,7 +452,7 @@ async function doRefill(opts) {
       },
     });
     renderPool();
-    if (!r.ok && r.reason) $('refill-log').textContent = r.reason;
+    if (r.reason && (!r.ok || r.rateLimited)) $('refill-log').textContent = r.reason;
   } finally {
     btn.textContent = was; btn.disabled = false; refilling = false;
   }
@@ -457,7 +466,7 @@ function maybeRefill() {
   doRefill({ maxCalls: 8, full: false }).catch(() => {});
 }
 
-$('refill').addEventListener('click', () => doRefill({ maxCalls: 60, full: true }));
+$('refill').addEventListener('click', () => doRefill({ full: true }));
 $('pool-clear').addEventListener('click', () => {
   if (!confirm('Throw away every model-written sentence in the pool?')) return;
   pool.clear(); renderPool();

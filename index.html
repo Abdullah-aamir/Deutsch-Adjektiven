@@ -25,7 +25,8 @@
   </nav>
   <div class="topbar-right">
     <button id="install" class="ghost" hidden>Install</button>
-    <button id="settings-open" class="ghost" aria-label="Settings" title="Settings">&#9881;</button>
+    <button id="settings-open" class="ghost" aria-label="Settings" title="Settings">
+      <span class="gear">&#9881;</span><span class="settings-word">Settings</span></button>
   </div>
 </header>
 
@@ -98,22 +99,24 @@
 
   <label class="row">
     <input type="checkbox" id="ai-toggle">
-    <span>Model-written sentences<br>
+    <span>Use model-written sentences<br>
       <small>Your key, your account, stored on this device only. The model
       writes sentences; the ending is still computed from the 36-cell table,
-      and anything whose stated gender contradicts the slot is thrown away.</small></span>
+      and anything whose stated gender contradicts the slot is thrown away.
+      Fill in the key below — this ticks itself when you do.</small></span>
   </label>
 
-  <div id="ai-fields" hidden>
+  <div id="ai-fields">
     <label class="field"><span>Provider</span>
       <select id="ai-provider"></select></label>
     <label class="field"><span>Endpoint</span>
       <input type="text" id="ai-base" spellcheck="false" placeholder="https://..."></label>
     <label class="field"><span>Model</span>
       <input type="text" id="ai-model" spellcheck="false" placeholder="model id">
-      <small>Paste the ID from your provider's current model list. Large
-      multilingual models do this well; small ones get German endings wrong
-      and most of their output will be rejected.</small></label>
+      <small>Free OpenRouter IDs end in <code>:free</code> and allow 20
+      requests a minute, 50 a day. Filling the pool costs about one day's
+      allowance; topping it up costs a few calls a month. Large models do
+      German endings far better than small ones.</small></label>
     <label class="field"><span>API key</span>
       <input type="password" id="ai-key" spellcheck="false" autocomplete="off" placeholder="sk-..."></label>
 
@@ -134,6 +137,7 @@
   </div>
   <input type="file" id="import-file" accept="application/json" hidden>
   <p class="small" id="stats"></p>
+  <p class="small build" id="build"></p>
   <form method="dialog"><button class="primary">Close</button></form>
 </dialog>
 

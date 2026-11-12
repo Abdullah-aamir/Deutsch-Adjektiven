@@ -251,3 +251,14 @@ dialog .field input, dialog .field select {
 }
 .gauge { height: 6px; background: var(--rule); border-radius: 3px; margin: 1rem 0 .4rem; overflow: hidden; }
 #pool-bar { height: 100%; width: 0; background: var(--hit); transition: width .3s ease; }
+
+/* The settings control must be a real target on a phone, not a 12px glyph. */
+#settings-open { display: inline-flex; align-items: center; gap: .4rem; }
+#settings-open .gear { font-size: 1rem; line-height: 1; }
+.settings-word { display: none; }
+@media (min-width: 560px) { .settings-word { display: inline; } }
+@media (hover: none), (pointer: coarse) {
+  .topbar button.ghost, .tab { min-height: 44px; }
+  #settings-open { min-width: 44px; justify-content: center; }
+}
+dialog .build { color: var(--ink-faint); font-size: .72rem; margin: .8rem 0 0; }

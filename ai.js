@@ -21,13 +21,15 @@ const KEY = 'aet.ai.v1';
    using the "mistral-large-latest" alias, which moves under you when Mistral
    ships a new flagship. */
 export const PROVIDERS = {
-  mistral: {
-    label: 'Mistral (direct)', base: 'https://api.mistral.ai/v1',
-    model: 'mistral-large-4', hint: 'mistral-large-4',
-  },
   openrouter: {
-    label: 'OpenRouter', base: 'https://openrouter.ai/api/v1',
-    model: 'mistralai/mistral-large-4-0', hint: 'mistralai/mistral-large-4-0',
+    label: 'OpenRouter (free tier)', base: 'https://openrouter.ai/api/v1',
+    model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    hint: 'any :free id — see the README for alternates',
+    free: true,
+  },
+  mistral: {
+    label: 'Mistral (paid)', base: 'https://api.mistral.ai/v1',
+    model: 'mistral-large-4', hint: 'mistral-large-4',
   },
   together: {
     label: 'Together', base: 'https://api.together.xyz/v1',
@@ -47,10 +49,17 @@ export const PROVIDERS = {
   },
 };
 
+/* OpenRouter's free tier allows 20 requests a minute and 50 a day (1,000 a
+   day once you have bought credits). A full pool is about 50 calls, so it
+   costs roughly one day's free budget to fill and a handful of calls a month
+   to keep topped up. The refill stops short of the cap rather than running
+   into it. */
+export const FREE_TIER_CALL_BUDGET = 40;
+
 export function loadConfig() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* ignore */ }
-  const provider = saved.provider || 'mistral';
+  const provider = saved.provider || 'openrouter';
   const d = PROVIDERS[provider] || PROVIDERS.custom;
   return {
     enabled: !!saved.enabled,
@@ -125,11 +134,12 @@ async function post(cfg, prompt, signal, withJsonMode) {
   };
   if (withJsonMode) body.response_format = { type: 'json_object' };
 
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${cfg.apiKey}`,
+  };
   return fetch(`${cfg.base.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    signal,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
-    body: JSON.stringify(body),
+    method: 'POST', signal, headers, body: JSON.stringify(body),
   });
 }
 
@@ -140,6 +150,13 @@ async function callModel(cfg, prompt, signal) {
   if (res.status === 400) {
     const peek = await res.clone().text().catch(() => '');
     if (/response_format|json/i.test(peek)) res = await post(cfg, prompt, signal, false);
+  }
+  if (res.status === 429) {
+    const retryAfter = Number(res.headers.get('retry-after')) || 0;
+    const err = new Error('rate-limited');
+    err.rateLimited = true;
+    err.retryAfter = retryAfter;
+    throw err;
   }
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -166,12 +183,22 @@ async function callModel(cfg, prompt, signal) {
  *
  * @param onProgress called with ({done, total, cell, kept, rejected})
  */
-export async function refill({ maxCalls = 40, full = false, signal, onProgress } = {}) {
+const sleep = (ms, signal) => new Promise((resolve, reject) => {
+  const t = setTimeout(resolve, ms);
+  signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('aborted', 'AbortError')); });
+});
+
+export async function refill({ maxCalls, full = false, signal, onProgress } = {}) {
   const cfg = loadConfig();
   if (!cfg.enabled) return { ok: false, reason: 'AI items are switched off.' };
   if (!cfg.apiKey) return { ok: false, reason: 'No API key saved.' };
   if (!cfg.base || !cfg.model) return { ok: false, reason: 'No endpoint or model set.' };
   if (!navigator.onLine) return { ok: false, reason: 'Offline — the pool will be topped up next time you are online.' };
+
+  // Stay inside the free daily allowance unless the user is on a paid model.
+  const budget = maxCalls ?? (PROVIDERS[cfg.provider]?.free || /:free$/.test(cfg.model)
+    ? FREE_TIER_CALL_BUDGET : 60);
+  maxCalls = budget;
 
   let calls = 0, kept = 0, rejected = 0;
   const reasons = {};
@@ -188,7 +215,15 @@ export async function refill({ maxCalls = 40, full = false, signal, onProgress }
 
     try {
       calls++;
-      const raw = await callModel(cfg, buildPrompt(cell, want), signal);
+      let raw;
+      try {
+        raw = await callModel(cfg, buildPrompt(cell, want), signal);
+      } catch (e) {
+        if (!e.rateLimited) throw e;
+        // 20 requests a minute on the free tier: wait out the window once.
+        await sleep(Math.min(20, e.retryAfter || 8) * 1000, signal);
+        raw = await callModel(cfg, buildPrompt(cell, want), signal);
+      }
       const r = validateBatch(raw, cell);
       const added = pool.add(cell.id, r.kept);
       kept += added;
@@ -199,6 +234,16 @@ export async function refill({ maxCalls = 40, full = false, signal, onProgress }
       onProgress?.({ calls, cell, kept, rejected, remaining: targets.length });
     } catch (err) {
       if (err.name === 'AbortError') return { ok: false, reason: 'Refill cancelled.', kept, rejected };
+      if (err.rateLimited) {
+        // Out of free quota for now. Keep what we got; the pool and the
+        // static generator both still work.
+        pool.note({ event: 'refill', kept, rejected, reasons });
+        return {
+          ok: true, kept, rejected, reasons, calls, rateLimited: true,
+          reason: `Free-tier limit reached after ${calls} calls — kept ${kept}. ` +
+                  'Try again later; the pool and the built-in generator keep working meanwhile.',
+        };
+      }
       pool.note({ event: 'error', cell: cell.key, message: String(err.message || err) });
       return { ok: false, reason: `${err.message || err}`, kept, rejected, reasons };
     }
