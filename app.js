@@ -7,13 +7,13 @@ import {
   posteriorMean, gridData, mistakes, SESSION_LENGTH,
 } from './engine.js';
 import { pool, LOW_WATER } from './pool.js';
-import { refill, loadConfig, saveConfig, isConfigured, PROVIDERS } from './ai.js';
+import { refill, testConnection, loadConfig, saveConfig, isConfigured, PROVIDERS } from './ai.js';
 
 const $ = id => document.getElementById(id);
 
 /* Shown in Settings so you can tell at a glance which build is deployed —
    an installed PWA can serve a cached older one. Keep in step with sw.js. */
-const APP_VERSION = 'v6';
+const APP_VERSION = 'v7';
 
 const app = {
   attempts: store.loadAttempts(),
@@ -467,6 +467,18 @@ function maybeRefill() {
 }
 
 $('refill').addEventListener('click', () => doRefill({ full: true }));
+
+$('test-conn').addEventListener('click', async () => {
+  const btn = $('test-conn');
+  btn.disabled = true;
+  const was = btn.textContent;
+  btn.textContent = 'Testing...';
+  readAiFields();
+  try {
+    const r = await testConnection();
+    $('refill-log').textContent = (r.ok ? '✓ ' : '✗ ') + r.detail;
+  } finally { btn.textContent = was; btn.disabled = false; }
+});
 $('pool-clear').addEventListener('click', () => {
   if (!confirm('Throw away every model-written sentence in the pool?')) return;
   pool.clear(); renderPool();

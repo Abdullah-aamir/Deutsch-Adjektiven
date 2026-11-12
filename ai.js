@@ -23,7 +23,7 @@ const KEY = 'aet.ai.v1';
 export const PROVIDERS = {
   openrouter: {
     label: 'OpenRouter (free tier)', base: 'https://openrouter.ai/api/v1',
-    model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    model: 'google/gemma-4-31b-it:free',
     hint: 'any :free id — see the README for alternates',
     free: true,
   },
@@ -126,7 +126,7 @@ async function post(cfg, prompt, signal, withJsonMode) {
   const body = {
     model: cfg.model,
     temperature: 0.9,
-    max_tokens: 1600,
+    max_tokens: 4000,
     messages: [
       { role: 'system', content: 'You are a careful German teacher. You reply with JSON only.' },
       { role: 'user', content: prompt },
@@ -143,46 +143,143 @@ async function post(cfg, prompt, signal, withJsonMode) {
   });
 }
 
+/* ---------------------------------------------------------------------------
+ * Reading the reply.
+ *
+ * Models do not reliably return bare JSON. They wrap it in prose, in markdown
+ * fences, or in <think> blocks; reasoning models spend the token budget
+ * thinking and get cut off mid-array. None of that should surface as a raw
+ * "Expected ',' or ']'" from JSON.parse, and a truncated reply should still
+ * give up the items that did arrive — on a free tier a wasted call is a real
+ * cost.
+ * ------------------------------------------------------------------------ */
+
+function stripNoise(text) {
+  return String(text ?? '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<\/?(?:think|thinking|reasoning|scratchpad)>/gi, '')
+    .replace(/```(?:json|javascript)?/gi, '')
+    .trim();
+}
+
+const tryParse = t => { try { return JSON.parse(t); } catch { return null; } };
+
+/** The balanced {...} or [...] starting at i, or null if it never closes. */
+function balancedFrom(text, i) {
+  const open = text[i];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0, inStr = false, esc = false;
+  for (let j = i; j < text.length; j++) {
+    const c = text[j];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { if (inStr) esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === open) depth++;
+    else if (c === close && --depth === 0) return text.slice(i, j + 1);
+  }
+  return null;
+}
+
+const itemsOf = v =>
+  Array.isArray(v) ? v
+    : (v && typeof v === 'object' && (v.items || v.sentences || v.data || v.examples)) || [];
+
+export function extractItems(rawText) {
+  const text = stripNoise(rawText);
+  if (!text) throw new Error('the model returned an empty reply');
+
+  // 1. the whole thing is JSON
+  const whole = tryParse(text);
+  if (whole) {
+    const it = itemsOf(whole);
+    if (Array.isArray(it) && it.length) return it;
+  }
+
+  // 2. the first balanced block that yields items
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{' && text[i] !== '[') continue;
+    const chunk = balancedFrom(text, i);
+    // An unbalanced opener means this block was truncated; a later one may
+    // still be whole, so keep scanning rather than giving up here.
+    if (!chunk) continue;
+    const parsed = tryParse(chunk);
+    const it = parsed ? itemsOf(parsed) : [];
+    if (Array.isArray(it) && it.length) return it;
+    if (chunk) i += chunk.length - 1;
+  }
+
+  // 3. truncated mid-array: keep every object that did arrive complete
+  const salvaged = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    const chunk = balancedFrom(text, i);
+    if (!chunk) continue;
+    const obj = tryParse(chunk);
+    if (obj && typeof obj === 'object' && typeof obj.sentence === 'string') salvaged.push(obj);
+    i += chunk.length - 1;
+  }
+  if (salvaged.length) return salvaged;
+
+  throw new Error(
+    `could not read JSON from the reply (${text.length} chars, begins "${text.slice(0, 50)}")`);
+}
+
 async function callModel(cfg, prompt, signal) {
   // Not every endpoint accepts response_format. If one rejects it, ask again
-  // without — the parser below copes with JSON wrapped in prose anyway.
-  let res = await post(cfg, prompt, signal, true);
-  if (res.status === 400) {
-    const peek = await res.clone().text().catch(() => '');
-    if (/response_format|json/i.test(peek)) res = await post(cfg, prompt, signal, false);
+  // without — the reader above copes with JSON wrapped in prose anyway.
+  let res;
+  try {
+    res = await post(cfg, prompt, signal, true);
+    if (res.status === 400) {
+      const peek = await res.clone().text().catch(() => '');
+      if (/response_format|json/i.test(peek)) res = await post(cfg, prompt, signal, false);
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    // fetch() rejects with a bare TypeError for CORS, DNS and blocked requests.
+    const err = new Error(
+      'Could not reach the endpoint. Check the URL, and note that a page opened ' +
+      'from file:// or inside a sandboxed preview is usually blocked from calling ' +
+      'other sites — deploy it and try there.');
+    err.cause = e;
+    throw err;
   }
+
   if (res.status === 429) {
-    const retryAfter = Number(res.headers.get('retry-after')) || 0;
     const err = new Error('rate-limited');
     err.rateLimited = true;
-    err.retryAfter = retryAfter;
+    err.retryAfter = Number(res.headers.get('retry-after')) || 0;
     throw err;
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`${res.status} — the API key was rejected by this endpoint.`);
+  }
+  if (res.status === 404) {
+    throw new Error(`404 — "${cfg.model}" is not a model this endpoint serves. ` +
+      'Free model IDs are withdrawn without notice; try another.');
   }
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`${res.status} ${res.statusText}${body ? ' — ' + body.slice(0, 160) : ''}`);
   }
+
   const data = await res.json();
-  const text = data?.choices?.[0]?.message?.content ?? '';
-  let parsed;
-  try { parsed = JSON.parse(text); }
-  catch {
-    const m = text.match(/\{[\s\S]*\}/);           // some models wrap it in prose
-    if (!m) throw new Error('model did not return JSON');
-    parsed = JSON.parse(m[0]);
+  const choice = data?.choices?.[0];
+  const text = choice?.message?.content ?? '';
+  const cut = choice?.finish_reason === 'length';
+
+  try {
+    return extractItems(text);
+  } catch (e) {
+    if (cut) {
+      throw new Error('the reply was cut off before any complete sentence arrived — ' +
+        'this model spends its budget on reasoning. Try a non-reasoning model.');
+    }
+    throw e;
   }
-  const items = Array.isArray(parsed) ? parsed : parsed.items || parsed.sentences || [];
-  if (!Array.isArray(items)) throw new Error('no items array in the reply');
-  return items;
 }
 
-/**
- * Top up the emptiest cells. Safe to call at any time: it does nothing
- * without a key, when offline, or when every cell is above the low-water
- * mark. Never throws into the UI — it reports instead.
- *
- * @param onProgress called with ({done, total, cell, kept, rejected})
- */
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
   const t = setTimeout(resolve, ms);
   signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('aborted', 'AbortError')); });
@@ -251,6 +348,33 @@ export async function refill({ maxCalls, full = false, signal, onProgress } = {}
 
   pool.note({ event: 'refill', kept, rejected, reasons });
   return { ok: true, kept, rejected, reasons, calls };
+}
+
+/**
+ * One call, reported in full: reachability, auth, model id, whether the reply
+ * could be read, and how much of it survived the validator. Costs a single
+ * request out of the daily allowance and replaces a guessing game.
+ */
+export async function testConnection({ signal } = {}) {
+  const cfg = loadConfig();
+  if (!cfg.apiKey) return { ok: false, detail: 'No API key saved.' };
+  if (!cfg.base || !cfg.model) return { ok: false, detail: 'No endpoint or model set.' };
+
+  const cell = CELLS.find(c => c.key === 'def|acc|m') || CELLS[0];
+  try {
+    const raw = await callModel(cfg, buildPrompt(cell, 3), signal);
+    const r = validateBatch(raw, cell);
+    const reasons = r.rejected.map(x => x.reason.split(':')[0]);
+    return {
+      ok: true,
+      detail: `Reached ${cfg.model}: ${raw.length} sentence(s) back, ` +
+        `${r.kept.length} passed, ${r.rejected.length} rejected` +
+        (reasons.length ? ` (${[...new Set(reasons)].join(', ')})` : '') + '.',
+    };
+  } catch (err) {
+    if (err.rateLimited) return { ok: false, detail: 'Rate-limited — the free daily allowance is used up.' };
+    return { ok: false, detail: String(err.message || err) };
+  }
 }
 
 export { CELLS };

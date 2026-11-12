@@ -9,6 +9,7 @@
 
 import { CELL_BY_KEY } from './data.js';
 import { validateItem, validateBatch, Rejected } from './validate.js';
+import { extractItems } from './ai.js';
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -236,6 +237,53 @@ test('every one of the 36 cells can be filled by a cooperative model', () => {
     filled++;
   }
   eq(filled, 36, 'cells fillable:');
+});
+
+/* ===========================================================================
+ * Reading what the model actually sends back.
+ * A raw JSON.parse error reaching the user ("Expected ',' or ']' at position
+ * 141") was a real bug: models wrap JSON in prose, fences and <think> blocks,
+ * and reasoning models get cut off mid-array.
+ * ======================================================================== */
+const ITEM = '{"sentence":"Ich mag altes Buch.","adjective":"alt","noun":"Buch","article":"das"}';
+
+test('JSON wrapped in prose, fences or think blocks is still read', () => {
+  const wrappers = [
+    `{"items":[${ITEM}]}`,
+    `Here you go:\n\`\`\`json\n{"items":[${ITEM}]}\n\`\`\``,
+    `<think>neuter dative needs -es</think>{"items":[${ITEM}]}`,
+    `[${ITEM}]`,
+    `Sure! {"sentences":[${ITEM}]} Hope that helps.`,
+    `{"items":[]} ... actually: {"items":[${ITEM}]}`,
+  ];
+  for (const w of wrappers) {
+    const items = extractItems(w);
+    eq(items.length, 1, `wrapper ${w.slice(0, 24)}:`);
+    eq(items[0].adjective, 'alt');
+  }
+});
+
+test('a reply cut off mid-array still yields the complete items', () => {
+  const three = [1, 2, 3].map(i =>
+    `{"sentence":"Satz ${i}.","adjective":"alt","noun":"Buch","article":"das"}`).join(',');
+  const cut = `{"items":[${three},{"sentence":"Ich sehe den klein`;
+  const items = extractItems(cut);
+  eq(items.length, 3, 'salvaged from a truncated reply:');
+  eq(items[2].sentence, 'Satz 3.');
+});
+
+test('an unreadable reply raises a sentence, not a parser error', () => {
+  for (const junk of ['', '   ', 'I am sorry, I cannot help with that.', '<think>hmm</think>']) {
+    try {
+      extractItems(junk);
+      throw new Error(`accepted junk: ${JSON.stringify(junk)}`);
+    } catch (e) {
+      assert(!/Expected ',' or|Unexpected token|position \d+/.test(e.message),
+        `raw parser error leaked to the user: ${e.message}`);
+      assert(/model returned an empty reply|could not read JSON/.test(e.message),
+        `unhelpful message: ${e.message}`);
+    }
+  }
 });
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

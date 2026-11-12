@@ -222,7 +222,7 @@ Defaults to **OpenRouter's free tier** — no card, no credits:
 |---|---|
 | Provider | OpenRouter (free tier) |
 | Endpoint | `https://openrouter.ai/api/v1` |
-| Model | `nvidia/nemotron-3-ultra-550b-a55b:free` |
+| Model | `google/gemma-4-31b-it:free` |
 
 Get a key at openrouter.ai, paste it into Settings, press **Refill pool**.
 
@@ -252,8 +252,8 @@ older guides still recommend (`openai/gpt-oss-120b:free`,
 
 | Free ID | Why you might pick it |
 |---|---|
-| `nvidia/nemotron-3-ultra-550b-a55b:free` | 550B, the largest free model — the default here |
-| `google/gemma-4-31b-it:free` | Google's models tend to be strong on European languages |
+| `google/gemma-4-31b-it:free` | the default: Google's models are strong on European languages, and it is not a reasoning model, so it spends its tokens on the answer |
+| `nvidia/nemotron-3-ultra-550b-a55b:free` | 550B, the largest free model — but it reasons first and can get cut off |
 | `nvidia/nemotron-3.5-super-vl:free` | 120B MoE, 12B active |
 | `nvidia/nemotron-3.5-lightning:free` | fastest of the group |
 | `openrouter/free` | OpenRouter's router, picks a free model at random |
@@ -261,6 +261,24 @@ older guides still recommend (`openai/gpt-oss-120b:free`,
 If one 404s, swap the ID — nothing else changes. And since free endpoints may
 log prompts or use them for training, note that what is sent is a German
 grammar instruction and nothing about you.
+
+#### When a refill fails
+
+Press **Test connection**. It makes one call and reports exactly what happened:
+whether the endpoint was reachable, whether the key was accepted, whether the
+model ID exists, whether the reply could be read, and how many sentences
+survived the validator. That turns a vague failure into a specific one for the
+price of a single request.
+
+Two failures worth recognising:
+
+- **"Could not reach the endpoint"** — a bare `fetch` failure, which usually
+  means the page is not allowed to call other sites: opened from `file://`, or
+  running inside a sandboxed preview. Deploy it to Pages and try there.
+- **"the reply was cut off"** — a reasoning model spent its token budget
+  thinking. Switch to a non-reasoning model. Partial replies are salvaged
+  where possible, so a cut-off reply still contributes whatever sentences
+  arrived complete.
 
 **Which is actually best for German? Run the experiment.** I do not know, and
 neither does a leaderboard — German adjective endings are a narrow skill. Put
