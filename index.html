@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Adjektivendungen</title>
+<meta name="description" content="A trainer for German attributive adjective endings. One topic, 36 cells, offline.">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1b1a19" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Endungen">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-screen="practice" aria-selected="true">Practice</button>
+    <button class="tab" role="tab" data-screen="grid" aria-selected="false">Grid</button>
+    <button class="tab" role="tab" data-screen="mistakes" aria-selected="false">Mistakes</button>
+  </nav>
+  <div class="topbar-right">
+    <button id="install" class="ghost" hidden>Install</button>
+    <button id="settings-open" class="ghost" aria-label="Settings" title="Settings">&#9881;</button>
+  </div>
+</header>
+
+<main>
+  <!-- ─────────────────────────── Practice ─────────────────────────── -->
+  <section id="screen-practice" class="screen active">
+    <div class="progress"><div id="progress-bar"></div></div>
+    <p class="counter"><span id="counter"></span></p>
+
+    <div id="question" class="question">
+      <p class="sentence"><span id="before"></span><span class="nobreak"><span
+          id="stem"></span><input id="answer" class="blank" type="text"
+          inputmode="latin" autocomplete="off" autocorrect="off"
+          autocapitalize="off" spellcheck="false" maxlength="4"
+          aria-label="adjective ending"></span><span id="after"></span><span id="hint" class="hint"></span></p>
+
+      <div id="feedback" class="feedback" hidden>
+        <p id="verdict" class="verdict"></p>
+        <p id="solution" class="solution"></p>
+        <p id="explanation" class="explanation"></p>
+      </div>
+
+      <p class="nudge" id="nudge">Type the ending and press <kbd>Enter</kbd>.</p>
+    </div>
+
+    <div id="summary" class="summary" hidden>
+      <p class="score"><span id="score"></span></p>
+      <p class="moved" id="moved"></p>
+      <button id="again" class="primary">Another twenty <kbd>Enter</kbd></button>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────── Grid ───────────────────────────── -->
+  <section id="screen-grid" class="screen">
+    <p class="lede">Shaded by posterior mean. A red column is a gender problem,
+       a red row is a case problem, a red table is a pattern problem.</p>
+    <div id="grids"></div>
+    <p class="legend">
+      <span class="swatch" style="background:var(--miss)"></span> unknown
+      <span class="swatch" style="background:var(--mid)"></span>
+      <span class="swatch" style="background:var(--hit)"></span> solid
+      <span class="legend-note">small number = scored attempts</span>
+    </p>
+  </section>
+
+  <!-- ─────────────────────────── Mistakes ─────────────────────────── -->
+  <section id="screen-mistakes" class="screen">
+    <p class="lede">The last 50 wrong endings, newest first.</p>
+    <div id="mistakes"></div>
+  </section>
+</main>
+
+<!-- ────────────────────────────── Settings ────────────────────────── -->
+<dialog id="settings">
+  <h2>Settings</h2>
+  <label class="row">
+    <input type="checkbox" id="hints-toggle">
+    <span>Show the gender hint on strong cells<br>
+      <small>Attempts record whether the hint was shown, so the two populations
+      never mix in the grid.</small></span>
+  </label>
+  <hr>
+  <div class="row buttons">
+    <button id="export" class="ghost">Export data</button>
+    <button id="import" class="ghost">Import data</button>
+    <button id="reset" class="ghost danger">Erase history</button>
+  </div>
+  <input type="file" id="import-file" accept="application/json" hidden>
+  <p class="small" id="stats"></p>
+  <form method="dialog"><button class="primary">Close</button></form>
+</dialog>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

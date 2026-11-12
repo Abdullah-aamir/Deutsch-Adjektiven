@@ -1,0 +1,6 @@
+{
+  "name": "adjektiv-trainer",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node tests.js", "start": "python3 -m http.server 8000" }
+}

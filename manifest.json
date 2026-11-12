@@ -1,0 +1,25 @@
+{
+  "name": "Adjektivendungen — German adjective endings",
+  "short_name": "Endungen",
+  "description": "A trainer for German attributive adjective endings. One topic, 36 cells, works offline.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#faf7f2",
+  "theme_color": "#faf7f2",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["education"],
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Practice", "url": "./?screen=practice" },
+    { "name": "Grid", "url": "./?screen=grid" }
+  ]
+}
