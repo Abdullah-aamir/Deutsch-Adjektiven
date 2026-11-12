@@ -5,7 +5,7 @@
  * activate and the new worker takes over immediately.
  */
 
-const CACHE = 'adjektivendungen-v1';
+const CACHE = 'adjektivendungen-v2';
 
 const SHELL = [
   './',

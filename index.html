@@ -39,7 +39,7 @@
       <p class="sentence"><span id="before"></span><span class="nobreak"><span
           id="stem"></span><input id="answer" class="blank" type="text"
           inputmode="latin" autocomplete="off" autocorrect="off"
-          autocapitalize="off" spellcheck="false" maxlength="4"
+          autocapitalize="off" spellcheck="false" maxlength="4" enterkeyhint="go"
           aria-label="adjective ending"></span><span id="after"></span><span id="hint" class="hint"></span></p>
 
       <div id="feedback" class="feedback" hidden>
@@ -48,7 +48,10 @@
         <p id="explanation" class="explanation"></p>
       </div>
 
-      <p class="nudge" id="nudge">Type the ending and press <kbd>Enter</kbd>.</p>
+      <div class="advance-row">
+        <button id="advance" class="primary advance">Check</button>
+      </div>
+      <p class="nudge" id="nudge"><kbd>Enter</kbd> works too.</p>
     </div>
 
     <div id="summary" class="summary" hidden>

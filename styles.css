@@ -72,6 +72,12 @@ body {
 .tab[aria-selected="true"] { color: var(--ink); background: var(--panel); box-shadow: inset 0 0 0 1px var(--rule); }
 .topbar-right { display: flex; gap: .4rem; align-items: center; }
 
+button {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 button.ghost {
   appearance: none; font: inherit; font-size: .82rem; cursor: pointer;
   background: none; color: var(--ink-soft);
@@ -129,7 +135,17 @@ main { max-width: 56rem; margin: 0 auto; padding: 0 clamp(.8rem, 4vw, 2rem) 4rem
 .solution b { color: var(--hit); font-weight: 600; }
 .explanation { margin: 0; font-size: .92rem; line-height: 1.55; color: var(--ink-soft); }
 
-.nudge { text-align: center; margin: 2.4rem 0 0; font-size: .78rem; color: var(--ink-faint); }
+.advance-row { display: flex; justify-content: center; margin: 2.4rem 0 0; }
+.advance {
+  min-height: 3rem; min-width: 11rem; font-size: 1rem;
+  border-radius: 10px; padding: .7rem 1.6rem;
+  touch-action: manipulation;        /* no 300ms tap delay, no double-tap zoom */
+}
+.advance:active { transform: translateY(1px); }
+
+.nudge { text-align: center; margin: 1rem 0 0; font-size: .78rem; color: var(--ink-faint); }
+/* The keyboard hint is only true where there is a keyboard. */
+@media (hover: none), (pointer: coarse) { .nudge { display: none; } }
 kbd {
   font-family: var(--mono); font-size: .9em; border: 1px solid var(--rule);
   border-bottom-width: 2px; border-radius: 4px; padding: .05em .35em;
@@ -203,4 +219,11 @@ dialog form { text-align: right; margin-top: .4rem; }
   .legend-note { display: none; }
   table.mistakes td.when { display: none; }
   table.mistakes th:last-child { display: none; }
+}
+
+@media (max-width: 520px) {
+  .question { padding-top: clamp(1.2rem, 5vh, 2.5rem); }
+  .advance-row { margin-top: 1.8rem; }
+  .advance { width: 100%; max-width: 22rem; }
+  .feedback { margin-top: 1.6rem; }
 }

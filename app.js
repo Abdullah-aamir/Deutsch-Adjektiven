@@ -52,7 +52,8 @@ function showItem() {
   input.readOnly = false;
   input.className = 'blank';
   $('feedback').hidden = true;
-  $('nudge').textContent = 'Type the ending and press Enter.';
+  $('advance').textContent = 'Check';
+  $('advance').disabled = false;
 
   $('counter').textContent = `${app.i + 1} of ${app.items.length}`;
   $('progress-bar').style.width = `${(app.i / app.items.length) * 100}%`;
@@ -97,8 +98,12 @@ function submit() {
       + it.prompt_after.replace(/</g, '&lt;');
   $('explanation').textContent = res.correct ? '' : it.explanation;
   $('feedback').hidden = false;
-  $('nudge').textContent = app.i + 1 < app.items.length
-    ? 'Enter for the next one.' : 'Enter to finish.';
+
+  const btn = $('advance');
+  btn.textContent = app.i + 1 < app.items.length ? 'Next' : 'See results';
+  // A fast double-tap on "Check" must not skip straight past the explanation.
+  btn.disabled = true;
+  setTimeout(() => { btn.disabled = false; }, 350);
 
   renderGrid();
   renderMistakes();
@@ -247,6 +252,12 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   if (app.answered) advance(); else submit();
 });
+$('advance').addEventListener('click', () => {
+  if (app.answered) advance(); else submit();
+  // Re-focusing inside the click gesture reopens the phone keyboard.
+  if (!app.answered) $('answer').focus();
+});
+
 $('again').addEventListener('click', startSession);
 
 $('settings-open').addEventListener('click', () => {
