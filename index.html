@@ -46,6 +46,10 @@
         <p id="verdict" class="verdict"></p>
         <p id="solution" class="solution"></p>
         <p id="explanation" class="explanation"></p>
+        <p id="provenance" class="provenance" hidden>
+          <span></span>
+          <button id="flag" class="linky">Flag this sentence</button>
+        </p>
       </div>
 
       <div class="advance-row">
@@ -90,6 +94,38 @@
       <small>Attempts record whether the hint was shown, so the two populations
       never mix in the grid.</small></span>
   </label>
+  <hr>
+
+  <label class="row">
+    <input type="checkbox" id="ai-toggle">
+    <span>Model-written sentences<br>
+      <small>Your key, your account, stored on this device only. The model
+      writes sentences; the ending is still computed from the 36-cell table,
+      and anything whose stated gender contradicts the slot is thrown away.</small></span>
+  </label>
+
+  <div id="ai-fields" hidden>
+    <label class="field"><span>Provider</span>
+      <select id="ai-provider"></select></label>
+    <label class="field"><span>Endpoint</span>
+      <input type="text" id="ai-base" spellcheck="false" placeholder="https://..."></label>
+    <label class="field"><span>Model</span>
+      <input type="text" id="ai-model" spellcheck="false" placeholder="model id">
+      <small>Paste the ID from your provider's current model list. Large
+      multilingual models do this well; small ones get German endings wrong
+      and most of their output will be rejected.</small></label>
+    <label class="field"><span>API key</span>
+      <input type="password" id="ai-key" spellcheck="false" autocomplete="off" placeholder="sk-..."></label>
+
+    <div class="gauge"><div id="pool-bar"></div></div>
+    <p class="small" id="pool-status"></p>
+    <div class="row buttons">
+      <button id="refill" class="ghost">Refill pool</button>
+      <button id="pool-clear" class="ghost">Empty pool</button>
+    </div>
+    <p class="small" id="refill-log"></p>
+  </div>
+
   <hr>
   <div class="row buttons">
     <button id="export" class="ghost">Export data</button>

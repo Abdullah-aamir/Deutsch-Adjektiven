@@ -176,6 +176,9 @@ test('4. Adjective guard: no -el/-er, not hoch, not indeclinable', () => {
   for (const a of ADJECTIVES) {
     assert(!/el$/.test(a.lemma), `${a.lemma} ends in -el`);
     assert(!/er$/.test(a.lemma), `${a.lemma} ends in -er`);
+    // A lemma ending in -e has a shorter stem (leise -> leis-), so appending
+    // the ending would print "leisee". Shipped once; never again.
+    assert(!/e$/.test(a.lemma), `${a.lemma} ends in -e, stem is shorter than lemma`);
     assert(a.lemma !== 'hoch', 'hoch must be excluded');
     assert(!INDECLINABLE.includes(a.lemma), `${a.lemma} is indeclinable`);
     assert(a.applies_to.length > 0, `${a.lemma} applies to nothing`);

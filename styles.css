@@ -202,6 +202,7 @@ table.mistakes td.when { color: var(--ink-faint); font-size: .78rem; white-space
 dialog {
   border: 1px solid var(--rule); border-radius: 12px; padding: 1.4rem;
   background: var(--panel); color: var(--ink); max-width: 27rem; width: calc(100vw - 2rem);
+  max-height: 85dvh; overflow-y: auto;
   box-shadow: 0 20px 50px rgb(0 0 0 / .22);
 }
 dialog::backdrop { background: rgb(0 0 0 / .4); }
@@ -227,3 +228,26 @@ dialog form { text-align: right; margin-top: .4rem; }
   .advance { width: 100%; max-width: 22rem; }
   .feedback { margin-top: 1.6rem; }
 }
+
+/* ── provenance + AI settings ─────────────────────────────────────────── */
+.provenance {
+  margin: 1.1rem 0 0; font-size: .78rem; color: var(--ink-faint);
+  display: flex; gap: .6rem; align-items: baseline; justify-content: center;
+  flex-wrap: wrap;
+}
+button.linky {
+  appearance: none; background: none; border: 0; padding: 0; cursor: pointer;
+  font: inherit; color: var(--ink-faint); text-decoration: underline;
+  text-underline-offset: 2px;
+}
+button.linky:hover { color: var(--miss); }
+
+dialog .field { display: grid; gap: .22rem; margin: .7rem 0; font-size: .82rem; }
+dialog .field span { color: var(--ink-soft); }
+dialog .field input, dialog .field select {
+  font: inherit; font-size: .85rem; padding: .45rem .55rem;
+  border: 1px solid var(--rule); border-radius: 7px;
+  background: var(--paper); color: var(--ink); width: 100%;
+}
+.gauge { height: 6px; background: var(--rule); border-radius: 3px; margin: 1rem 0 .4rem; overflow: hidden; }
+#pool-bar { height: 100%; width: 0; background: var(--hit); transition: width .3s ease; }

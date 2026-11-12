@@ -3,9 +3,11 @@
 
 import { CELLS } from './data.js';
 import {
-  store, rebuildState, generateSession, check, applyAttempt,
+  store, rebuildState, generateItem, nextCell, check, applyAttempt,
   posteriorMean, gridData, mistakes, SESSION_LENGTH,
 } from './engine.js';
+import { pool, LOW_WATER } from './pool.js';
+import { refill, loadConfig, saveConfig, isConfigured, PROVIDERS } from './ai.js';
 
 const $ = id => document.getElementById(id);
 
@@ -25,10 +27,37 @@ app.state = rebuildState(app.attempts);
 /* ===========================================================================
  * Practice
  * ======================================================================== */
+/**
+ * One item. The selector picks the cell you are worst at; if the pool holds a
+ * model-written item for that cell we use it, otherwise the static generator
+ * makes one. That fallback is why the app works on a plane, with no key, and
+ * when the model is unreachable.
+ */
+function nextItem(batch) {
+  const opts = { hints: app.settings.hints };
+  const useAi = isConfigured();
+  for (let tries = 0; tries < 40; tries++) {
+    const cell = nextCell(app.state, Math.random);
+    if (useAi) {
+      const fromPool = pool.take(cell.id);
+      if (fromPool) return fromPool;
+    }
+    const item = generateItem(cell, app.attempts, batch, Math.random, opts, true);
+    if (item) return item;
+  }
+  return generateItem(nextCell(app.state, Math.random), app.attempts, batch, Math.random, opts, false);
+}
+
 function startSession() {
   app.meanBefore = new Map(CELLS.map(c => [c.id, posteriorMean(app.state[c.id])]));
-  app.items = generateSession(app.state, app.attempts, SESSION_LENGTH,
-    Math.random, { hints: app.settings.hints });
+  const batch = [];
+  app.items = [];
+  for (let i = 0; i < SESSION_LENGTH; i++) {
+    const item = nextItem(batch);
+    batch.push({ frame_id: item.frame_id, noun_id: item.noun_id, cell_id: item.cell_id });
+    app.items.push(item);
+  }
+  maybeRefill();
   app.i = 0;
   app.right = 0;
   $('summary').hidden = true;
@@ -45,13 +74,17 @@ function showItem() {
   $('before').textContent = it.prompt_before.slice(0, cut);
   $('stem').textContent = it.prompt_before.slice(cut);
   $('after').textContent = it.prompt_after;
-  $('hint').textContent = it.hint ? `(${it.hint})` : '';
+  const hint = app.settings.hints ? it.hint : null;
+  it.hint_shown = hint ? 1 : 0;
+  $('hint').textContent = hint ? `(${hint})` : '';
 
   const input = $('answer');
   input.value = '';
   input.readOnly = false;
   input.className = 'blank';
   $('feedback').hidden = true;
+  $('provenance').hidden = true;
+  $('flag').hidden = false;
   $('advance').textContent = 'Check';
   $('advance').disabled = false;
 
@@ -75,6 +108,9 @@ function submit() {
     adj_id: it.adj_id, prompt: it.full_sentence, expected: it.expected,
     given: String(given), correct: res.correct ? 1 : 0,
     hint_shown: it.hint_shown, ms, error_kind: res.error_kind,
+    adj_lemma: it.adj_lemma || null,
+    source: it.source || 'static',
+    trust: it.trust || 'verified',
   };
   app.attempts.push(attempt);
   store.saveAttempts(app.attempts);
@@ -97,6 +133,18 @@ function submit() {
     : it.prompt_before.replace(/</g, '&lt;') + '<b>' + it.expected + '</b>'
       + it.prompt_after.replace(/</g, '&lt;');
   $('explanation').textContent = res.correct ? '' : it.explanation;
+  const prov = $('provenance');
+  if (!res.correct && it.source === 'ai') {
+    prov.querySelector('span').textContent = it.trust === 'verified'
+      ? 'Model-written sentence. The ending is from the table, so it is right.'
+      : 'Model-written sentence. The ending is from the table; the noun\u2019s gender is the model\u2019s claim.';
+    prov.hidden = false;
+    app.flagged = it;
+  } else {
+    prov.hidden = true;
+    app.flagged = null;
+  }
+
   $('feedback').hidden = false;
 
   const btn = $('advance');
@@ -268,6 +316,7 @@ $('settings-open').addEventListener('click', () => {
     ? Math.round(100 * scored.filter(a => a.correct).length / scored.length) : 0;
   $('stats').textContent =
     `${scored.length} scored attempts over ${days} day${days === 1 ? '' : 's'}, ${acc}% right.`;
+  renderAiFields();
   $('settings').showModal();
 });
 
@@ -308,6 +357,117 @@ $('reset').addEventListener('click', () => {
   store.saveAttempts([]);
   app.state = rebuildState([]);
   renderGrid(); renderMistakes(); startSession();
+});
+
+/* ===========================================================================
+ * Model-written items: settings, pool gauge, refill
+ * ======================================================================== */
+function renderPool() {
+  const st = pool.status();
+  const pct = Math.round(100 * st.total / st.capacity);
+  $('pool-bar').style.width = `${Math.min(100, pct)}%`;
+  $('pool-status').textContent = st.total
+    ? `${st.total} sentences ready (${pct}% full). ${st.empty} of 36 cells empty.`
+    : 'Pool empty — the built-in generator is supplying every item.';
+  const last = st.log.filter(l => l.event === 'refill').slice(-1)[0];
+  const err = st.log.filter(l => l.event === 'error').slice(-1)[0];
+  $('refill-log').textContent = err && (!last || err.at > last.at)
+    ? `Last refill failed: ${err.message}`
+    : last
+      ? `Last refill: kept ${last.kept}, rejected ${last.rejected}` +
+        (Object.keys(last.reasons || {}).length
+          ? ` (${Object.entries(last.reasons).map(([k, v]) => `${k} x${v}`).join(', ')})` : '')
+      : '';
+}
+
+function renderAiFields() {
+  const cfg = loadConfig();
+  $('ai-toggle').checked = cfg.enabled;
+  $('ai-fields').hidden = !cfg.enabled;
+  const sel = $('ai-provider');
+  if (!sel.options.length) {
+    for (const [id, p] of Object.entries(PROVIDERS)) {
+      sel.add(new Option(p.label, id));
+    }
+  }
+  sel.value = cfg.provider;
+  $('ai-base').value = cfg.base;
+  $('ai-model').value = cfg.model;
+  $('ai-model').placeholder = (PROVIDERS[cfg.provider] || {}).hint || 'model id';
+  $('ai-key').value = cfg.apiKey;
+  renderPool();
+}
+
+function readAiFields() {
+  saveConfig({
+    enabled: $('ai-toggle').checked,
+    provider: $('ai-provider').value,
+    base: $('ai-base').value.trim(),
+    model: $('ai-model').value.trim(),
+    apiKey: $('ai-key').value.trim(),
+  });
+}
+
+$('ai-toggle').addEventListener('change', () => {
+  readAiFields();
+  $('ai-fields').hidden = !$('ai-toggle').checked;
+  if ($('ai-toggle').checked) maybeRefill();
+});
+$('ai-provider').addEventListener('change', e => {
+  const d = PROVIDERS[e.target.value];
+  if (d) {
+    $('ai-base').value = d.base;
+    $('ai-model').value = d.model || '';
+    $('ai-model').placeholder = d.hint || 'model id';
+  }
+  readAiFields();
+});
+for (const id of ['ai-base', 'ai-model', 'ai-key']) {
+  $(id).addEventListener('change', readAiFields);
+}
+
+let refilling = false;
+async function doRefill(opts) {
+  if (refilling) return;
+  refilling = true;
+  const btn = $('refill');
+  const was = btn.textContent;
+  btn.textContent = 'Refilling...';
+  btn.disabled = true;
+  try {
+    const r = await refill({
+      ...opts,
+      onProgress: p => {
+        btn.textContent = `Refilling... ${p.kept} kept`;
+        renderPool();
+      },
+    });
+    renderPool();
+    if (!r.ok && r.reason) $('refill-log').textContent = r.reason;
+  } finally {
+    btn.textContent = was; btn.disabled = false; refilling = false;
+  }
+}
+
+/* Called after every session. Tops up quietly in the background and never
+   blocks you from practising — the static generator covers any gap. */
+function maybeRefill() {
+  if (!isConfigured() || !navigator.onLine || refilling) return;
+  if (pool.lowCells().length === 0) return;
+  doRefill({ maxCalls: 8, full: false }).catch(() => {});
+}
+
+$('refill').addEventListener('click', () => doRefill({ maxCalls: 60, full: true }));
+$('pool-clear').addEventListener('click', () => {
+  if (!confirm('Throw away every model-written sentence in the pool?')) return;
+  pool.clear(); renderPool();
+});
+
+$('flag').addEventListener('click', () => {
+  if (!app.flagged) return;
+  pool.remove(app.flagged.full_sentence);
+  $('provenance').querySelector('span').textContent = 'Flagged and removed from the pool.';
+  $('flag').hidden = true;
 });
 
 /* Install prompt — Chrome fires this once the PWA criteria are met. */

@@ -5,7 +5,7 @@
  * activate and the new worker takes over immediately.
  */
 
-const CACHE = 'adjektivendungen-v2';
+const CACHE = 'adjektivendungen-v4';
 
 const SHELL = [
   './',
@@ -14,6 +14,9 @@ const SHELL = [
   './app.js',
   './engine.js',
   './data.js',
+  './pool.js',
+  './ai.js',
+  './validate.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

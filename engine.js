@@ -298,7 +298,9 @@ const KEY_SETTINGS = 'aet.settings.v1';
 const MAX_ATTEMPTS = 20000;
 
 const FIELDS = ['ts', 'cell_id', 'frame_id', 'noun_id', 'adj_id', 'prompt',
-  'expected', 'given', 'correct', 'hint_shown', 'ms', 'error_kind'];
+  'expected', 'given', 'correct', 'hint_shown', 'ms', 'error_kind',
+  // appended for model-written items; absent in rows written before they existed
+  'adj_lemma', 'source', 'trust'];
 
 const toRow = a => FIELDS.map(f => a[f]);
 const fromRow = r => Object.fromEntries(FIELDS.map((f, i) => [f, r[i]]));
@@ -368,7 +370,7 @@ export function mistakes(attempts, limit = 50) {
       ...a,
       cell: CELL_BY_ID.get(a.cell_id),
       noun: NOUN_BY_ID.get(a.noun_id),
-      adj: ADJ_BY_ID.get(a.adj_id),
+      adj: ADJ_BY_ID.get(a.adj_id) || (a.adj_lemma ? { lemma: a.adj_lemma } : null),
       frame: FRAME_BY_ID.get(a.frame_id),
     }));
 }
